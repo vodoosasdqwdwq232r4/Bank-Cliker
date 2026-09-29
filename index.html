@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bank Clicker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b0d10;color:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input{font:inherit}button{border:0;cursor:pointer}.app{max-width:1100px;margin:auto;min-height:100vh;padding-bottom:80px}
+header{padding:22px 18px 8px;display:flex;justify-content:space-between;align-items:center}.brand{font-size:23px;font-weight:800}.brand span{color:#58d68d}
+.card{background:#14181d;border:1px solid #252b32;border-radius:20px;padding:18px;margin:12px 14px;box-shadow:0 8px 30px #0004}
+.balance{font-size:38px;font-weight:800;margin:7px 0}.muted{color:#8e98a5}.green{color:#58d68d}.red{color:#ff7070}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.stat{background:#101419;border-radius:15px;padding:14px}.stat b{display:block;font-size:20px;margin-top:4px}
+nav{position:fixed;bottom:0;left:0;right:0;background:#101317dd;backdrop-filter:blur(15px);border-top:1px solid #252b32;display:flex;justify-content:center;z-index:5}
+nav button{background:none;color:#8e98a5;padding:12px 10px;font-size:12px;min-width:75px}nav button.active{color:#58d68d}
+.page{display:none}.page.active{display:block}
+.click{width:min(260px,75vw);height:min(260px,75vw);border-radius:50%;background:linear-gradient(145deg,#58d68d,#2dbb70);color:#06130c;font-size:28px;font-weight:900;box-shadow:0 15px 45px #2dbb7044;margin:25px auto;display:block}.click:active{transform:scale(.94)}
+input{width:100%;padding:14px;border-radius:12px;border:1px solid #303741;background:#0d1115;color:#fff;margin:6px 0;outline:none}button.primary{background:#58d68d;color:#06130c;padding:14px 18px;border-radius:12px;font-weight:800;width:100%;margin-top:8px}button.secondary{background:#252b32;color:#fff;padding:12px;border-radius:12px;width:100%;margin-top:8px}
+.row{display:flex;gap:8px}.row>*{flex:1}.op{padding:11px 0;border-bottom:1px solid #242a31}.hidden{display:none!important}
+#auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.authbox{width:min(430px,100%)}h1{font-size:34px;margin:0 0 6px}.tabs{display:flex;background:#11151a;border-radius:12px;padding:4px;margin:18px 0}.tabs button{flex:1;background:none;color:#8993a0;padding:10px;border-radius:9px}.tabs button.on{background:#252b32;color:#fff}
+.toast{position:fixed;top:15px;left:50%;transform:translateX(-50%);background:#20262d;padding:11px 16px;border-radius:12px;z-index:10;display:none}
+.small{font-size:12px}.logout{background:#252b32;color:#fff;padding:8px 12px;border-radius:10px}
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+
+<section id="auth">
+ <div class="authbox">
+  <div class="brand">BANK <span>CLICKER</span></div>
+  <h1>Твій ігровий банк</h1><div class="muted">Тільки віртуальні гроші для гри.</div>
+  <div class="tabs"><button id="tabLogin" class="on">Вхід</button><button id="tabReg">Реєстрація</button></div>
+  <input id="nick" placeholder="Нікнейм" maxlength="24" autocomplete="username">
+  <input id="pass" type="password" placeholder="Пароль" autocomplete="current-password">
+  <input id="pass2" type="password" placeholder="Повторіть пароль" class="hidden">
+  <button id="authBtn" class="primary">Увійти</button>
+  <p class="muted small">Для реєстрації потрібен унікальний нік. Баланс створюється сервером.</p>
+ </div>
+</section>
+
+<div id="app" class="app hidden">
+<header><div class="brand">BANK <span>CLICKER</span></div><button id="logout" class="logout">Вийти</button></header>
+
+<main>
+<section id="home" class="page active">
+ <div class="card"><div class="muted">Баланс</div><div id="bal" class="balance">0 грн</div><div id="nickShow" class="muted"></div></div>
+ <div class="card"><div class="grid">
+  <div class="stat">Кліків<b id="clicks">0</b></div><div class="stat">Зароблено<b id="earned">0 грн</b></div>
+ </div></div>
+ <div class="card"><h3>Останні операції</h3><div id="recent" class="muted">Поки немає операцій.</div></div>
+</section>
+
+<section id="clicker" class="page">
+ <div class="card" style="text-align:center"><div class="muted">За кожен клік</div><h2>+1 грн</h2><button id="clickBtn" class="click">+1 грн</button><div id="clickInfo" class="muted">Кліків: 0</div></div>
+</section>
+
+<section id="transfers" class="page">
+ <div class="card"><h2>Переказ</h2><input id="toNick" placeholder="Нік отримувача"><input id="amount" type="number" min="1" step="1" placeholder="Сума, грн"><button id="sendBtn" class="primary">Переказати</button></div>
+ <div class="card"><h3>Підказка</h3><div class="muted">Перекази працюють тільки всередині гри. Самому собі переказати не можна.</div></div>
+</section>
+
+<section id="currency" class="page">
+ <div class="card"><h2>Валюта</h2><div id="rates">Завантаження…</div></div>
+</section>
+
+<section id="history" class="page"><div class="card"><h2>Історія</h2><div id="historyList">Завантаження…</div></div></section>
+
+<section id="loans" class="page">
+ <div class="card"><h2>Ігрові кредити</h2><div id="loansList">Завантаження…</div></div>
+</section>
+
+<section id="profile" class="page">
+ <div class="card"><h2>Профіль</h2><div id="profileText"></div></div>
+</section>
+</main>
+<nav>
+<button data-page="home" class="active">Головна</button><button data-page="clicker">Клікер</button><button data-page="transfers">Переказ</button><button data-page="currency">Валюта</button><button data-page="history">Історія</button><button data-page="loans">Кредити</button><button data-page="profile">Профіль</button>
+</nav>
+</div>
+
+<script>
+const SUPABASE_URL="https://wxpblblrjrohjtzdrzzp.supabase.co";
+const SUPABASE_KEY="sb_publishable_JzHpbQwYAueRSS0pWBXWNQ_fai3yEsG";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let reg=false, dashboard=null;
+
+const $=id=>document.getElementById(id);
+function toast(s){$("toast").textContent=s;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",2200)}
+function emailFor(n){return n.toLowerCase().trim().replace(/[^a-z0-9_.-]/g,"_")+"@bankclicker.local"}
+function fmt(n){return Number(n||0).toLocaleString("uk-UA",{maximumFractionDigits:2})+" грн"}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+
+$("tabLogin").onclick=()=>{reg=false;$("tabLogin").classList.add("on");$("tabReg").classList.remove("on");$("pass2").classList.add("hidden");$("authBtn").textContent="Увійти"}
+$("tabReg").onclick=()=>{reg=true;$("tabReg").classList.add("on");$("tabLogin").classList.remove("on");$("pass2").classList.remove("hidden");$("authBtn").textContent="Створити акаунт"}
+
+$("authBtn").onclick=async()=>{
+ const n=$("nick").value.trim(),p=$("pass").value;
+ if(n.length<3||n.length>24)return toast("Нік: 3–24 символи");
+ if(p.length<6)return toast("Пароль має бути мінімум 6 символів");
+ if(reg&&p!==$("pass2").value)return toast("Паролі не збігаються");
+ $("authBtn").disabled=true;
+ try{
+  if(reg){
+   const {data,error}=await sb.auth.signUp({email:emailFor(n),password:p,options:{data:{username:n}}});
+   if(error)throw error;
+   if(!data.session)return toast("Акаунт створено. Якщо увімкнене підтвердження email — його треба вимкнути в Supabase Auth для цієї гри.");
+   toast("Акаунт створено!");
+  }else{
+   const {error}=await sb.auth.signInWithPassword({email:emailFor(n),password:p});if(error)throw error;
+  }
+  await start();
+ }catch(e){toast(e.message||"Помилка")}finally{$("authBtn").disabled=false}
+};
+
+$("logout").onclick=async()=>{await sb.auth.signOut();location.reload()};
+
+async function start(){
+ const {data:{user}}=await sb.auth.getUser();if(!user)return;
+ $("auth").classList.add("hidden");$("app").classList.remove("hidden");
+ await load();
+}
+async function rpc(name,args={}){const {data,error}=await sb.rpc(name,args);if(error)throw error;return data}
+
+async function load(){
+ try{
+  dashboard=await rpc("get_dashboard");
+  const d=Array.isArray(dashboard)?dashboard[0]:dashboard;
+  if(d){
+   $("bal").textContent=fmt(d.balance);$("clicks").textContent=d.total_clicks??0;$("earned").textContent=fmt(d.total_earned);
+   $("clickInfo").textContent="Кліків: "+(d.total_clicks??0);$("nickShow").textContent=d.username||"";
+   $("profileText").innerHTML=`<p>Нікнейм: <b>${esc(d.username||"")}</b></p><p>Баланс: <b>${fmt(d.balance)}</b></p><p>Кліків: <b>${d.total_clicks??0}</b></p><p>Зароблено: <b>${fmt(d.total_earned)}</b></p><p class="muted">Player ID: ${esc(d.user_id||"")}</p>`;
+  }
+  await Promise.all([loadHistory(),loadRates(),loadLoans()]);
+ }catch(e){toast("Помилка завантаження: "+e.message)}
+}
+$("clickBtn").onclick=async()=>{
+ $("clickBtn").disabled=true;
+ try{await rpc("click_earn");await load()}catch(e){toast(e.message)}finally{setTimeout(()=>$("clickBtn").disabled=false,120)}
+};
+$("sendBtn").onclick=async()=>{
+ const to=$("toNick").value.trim(),amt=Number($("amount").value);
+ if(!to||!Number.isFinite(amt)||amt<=0)return toast("Вкажи отримувача і суму");
+ try{await rpc("transfer_money",{p_recipient_username:to,p_amount:amt});toast("Переказ виконано");$("amount").value="";await load()}catch(e){toast(e.message)}
+};
+async function loadHistory(){
+ try{const x=await rpc("get_dashboard");let arr=Array.isArray(x)?x:[];$("recent").innerHTML=arr.length?arr.slice(0,5).map(t=>`<div class="op">${esc(t.description||t.type||"Операція")} <b>${fmt(t.amount||0)}</b></div>`).join(""):"Поки немає операцій.";
+ }catch(e){$("recent").textContent="Історія поки порожня."}
+ try{
+  const {data,error}=await sb.from("transactions").select("id,amount,type,status,description,created_at").order("created_at",{ascending:false}).limit(50);
+  if(error)throw error;
+  $("historyList").innerHTML=(data||[]).map(t=>`<div class="op"><b>${esc(t.type)}</b> — ${fmt(t.amount)}<br><span class="muted small">${esc(t.status)} · ${new Date(t.created_at).toLocaleString("uk-UA")} · ${esc(t.description||"")}</span></div>`).join("")||"Поки немає операцій.";
+ }catch(e){$("historyList").textContent="Історія недоступна."}
+}
+async function loadRates(){
+ try{
+  const {data,error}=await sb.from("currency_rates").select("code,rate").order("code");if(error)throw error;
+  $("rates").innerHTML=(data||[]).map(r=>`<div class="op"><b>${esc(r.code)}</b> — ${Number(r.rate).toFixed(2)} грн</div>`).join("")||"Немає курсів";
+ }catch(e){$("rates").textContent="Курси недоступні."}
+}
+async function loadLoans(){
+ try{
+  const {data,error}=await sb.from("loan_offers").select("amount,interest_rate,term_days").order("amount");if(error)throw error;
+  $("loansList").innerHTML=(data||[]).map(x=>`<div class="op"><b>${fmt(x.amount)}</b> · ${x.interest_rate}% · ${x.term_days} днів<br><button class="secondary" onclick="takeLoan(${x.amount})">Взяти</button></div>`).join("")||"Немає пропозицій";
+ }catch(e){$("loansList").textContent="Кредити недоступні."}
+}
+window.takeLoan=async amount=>{try{await rpc("issue_loan",{p_amount:amount});toast("Кредит оформлено");await load()}catch(e){toast(e.message)}};
+
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+ document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");
+ document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$(b.dataset.page).classList.add("active");
+});
+sb.auth.getSession().then(({data})=>{if(data.session)start()});
+</script>
+</body>
+</html>
